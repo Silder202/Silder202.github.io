@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Juego Laberinto Zapoteca</title>
+  <style>
+        body {
+  background: linear-gradient(135deg, #F9F1D1 0%, #B43E24 100%);
+      font-family: 'Georgia', serif;
+      color: #3B1F0B;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      user-select: none;
+    }
+
+    h1 {
+      font-family: 'Papyrus', serif;
+      text-shadow: 2px 2px 0 #F9F1D1, 4px 4px 0 #B43E24;
+      margin-top: 20px;
+    }
+
+    #game-container {
+      margin-top: 20px;
+      background: #F2DFA7;
+      border: 6px solid #B43E24;
+      border-radius: 12px;
+      box-shadow: 0 0 15px 4px #B43E24;
+      position: relative;
+      width: 640px;
+    }
+
+    canvas {
+      display: block;
+      border-radius: 10px;
+      box-shadow: inset 0 0 20px #7A2300;
+      margin: auto;
+      cursor: crosshair;
+      /* El fondo del canvas será dinámico según nivel */
+    }
+
+    #info {
+      margin-top: 12px;
+      font-weight: bold;
+      font-size: 20px;
+      text-align: center;
+    }
+
+    /* Modal pregunta */
+    #question-modal {
+      font-family: 'Georgia', serif;
+      background: #F2DFA7;
+      border: 5px solid #B43E24;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 0 30px #B43E24;
+      max-width: 350px;
+      text-align: center;
+      color: #3B1F0B;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      visibility: hidden;
+      z-index: 1000;
+    }
+
+    #question-modal button {
+      background-color: #B43E24;
+      color: #F9F1D1;
+      border: none;
+      padding: 8px 16px;
+      margin: 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s ease;
+    }
+
+    #question-modal button:hover {
+      background-color: #7A2300;
+    }
+      #mobile-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 15px 0;
+    }
+    #mobile-controls button {
+      font-size: 24px;
+      padding: 10px 20px;
+      margin: 5px;
+      background-color: #B43E24;
+      color: #F9F1D1;
+      border: none;
+      border-radius: 10px;
+    }
+    #scoreboard {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 10px 20px;
+      font-size: 20px;
+      font-family: sans-serif;
+      border-radius: 10px;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <h1>Juego Laberinto Zapoteca</h1>
+  <div id="game-container">
+    <canvas id="game" width="640" height="640"></canvas>
+    <div id="info">Nivel: 1</div>
+  </div>
+  <div id="scoreboard">Puntos: <span id="score">0</span></div>
+<div id="mobile-controls" style="margin-top: 20px; text-align: center;">
+    <div style="margin-bottom: 10px;">
+      <button class="control-btn" data-key="ArrowUp">▲</button>
+    </div>
+    <div>
+      <button class="control-btn" data-key="ArrowLeft">◀</button>
+      <button class="control-btn" data-key="ArrowDown">▼</button>
+      <button class="control-btn" data-key="ArrowRight">▶</button>
+    </div>
+  </div>
+  <div id="question-modal">
+    <p id="question-text"></p>
+    <div id="answers"></div>
+  </div>
+
+  <script>
+
+
+ 
+
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const info = document.getElementById('info');
+    const questionModal = document.getElementById('question-modal');
+    const questionText = document.getElementById('question-text');
+    const answersDiv = document.getElementById('answers');
+
+    const playerSize = 20;
+    const playerColor = '#2E8B57'; // verde oscuro
+    const enemyColor = '#B22222'; // rojo fuego
+    const obstacleColor = '#8B4513'; // marrón tierra
+    const goalColor = '#FFD700'; // dorado puerta
+    const questionColor = '#FFF'; // blanco para preguntas
+
+    let currentLevel = 0;
+    let player;
+    let keys = {};
+    let gamePaused = false;
+  let score = 0;
+    // Preguntas culturales zapotecas (15 preguntas: 5 para nivel 1, 10 para nivel 2)
+    const questions = [
+  // Nivel 1 - 10 preguntas
+  {
+    text: "¿Quién era el dios principal del panteón zapoteca, asociado al cielo y la lluvia?",
+    options: ["Cocijo", "Xipe Tótec", "Tezcatlipoca"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Qué dios zapoteca estaba vinculado con el inframundo y los muertos?",
+    options: ["Mictlantecuhtli", "Pitao Bezelao", "Quetzalcóatl"],
+    correctIndex: 1
+  },
+  {
+    text: "¿Cuál era el dios zapoteca del maíz, esencial en la agricultura?",
+    options: ["Pitao Cozobi", "Tonacatecuhtli", "Tlaloc"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Qué papel cumplía la diosa zapoteca Xonaxi Quecuya?",
+    options: ["Diosa de la guerra", "Diosa madre de la tierra y fertilidad", "Diosa del amo"],
+    correctIndex: 1
+  },
+  {
+    text: "¿Qué dios zapoteca estaba asociado con el sol y el día?",
+    options: ["Copijcha", "Huitzilopochtli", "Yum Kaax"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Cómo se llamaba la antigua ciudad zapoteca capital de Monte Albán?",
+    options: ["Zaachila", "Monte Albán", "Mitla"],
+    correctIndex: 1
+  },
+  {
+    text: "¿Qué significa 'Zaachila' en la cultura zapoteca?",
+    options: ["Lugar de nubes", "Lugar de la danza", "Lugar de flores"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Qué elemento natural se relacionaba con la fertilidad y la agricultura en la cultura zapoteca?",
+    options: ["El agua", "El fuego", "El viento"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Cuál era la función principal de los códices zapotecas?",
+    options: ["Relatar historias", "Registrar eventos y ceremonias", "Construir templos"],
+    correctIndex: 1
+  },
+  {
+    text: "¿Qué símbolo zapoteca representaba el poder y la autoridad?",
+    options: ["El jaguar", "El águila", "La serpiente"],
+    correctIndex: 0
+  },
+
+  // Nivel 2 - 10 preguntas
+  {
+    text: "¿Quién era el dios zapoteca relacionado con el relámpago y el trueno?",
+    options: ["Chaac", "Cocijo", "Ehecatl"],
+    correctIndex: 1
+  },
+  {
+    text: "¿Qué dios zapoteca era considerado protector de los gobernantes y de la nobleza?",
+    options: ["Coqui Bezelao", "Tláloc", "Itzamná"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Cuál de estos dioses zapotecas era representado con atributos de murciélago?",
+    options: ["Zaachila", "Kukulkán", "Xolotl"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Qué elemento natural representaba el dios Cocijo?",
+    options: ["Viento", "Lluvia", "Fuego"],
+    correctIndex: 1
+  },
+  {
+    text: "¿Qué papel cumplía Pitao Cozobi en la vida zapoteca?",
+    options: ["Dios del maíz y la agricultura", "Dios del mar", "Dios de la guerra"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Cómo representaban los zapotecas al dios Cocijo en sus códices?",
+    options: ["Como un jaguar", "Con máscara de serpiente y rayos saliendo de la boca", "Como un águila"],
+    correctIndex: 1
+  },
+  {
+    text: "¿Cuál de estos dioses zapotecas simbolizaba la muerte y el renacimiento?",
+    options: ["Pitao Bezelao", "Tonatiuh", "Ix Chel"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Qué dios zapoteca era considerado un dios solar joven?",
+    options: ["Copijcha", "Kinich Ahau", "Xipe Tótec"],
+    correctIndex: 0
+  },
+  {
+    text: "¿Cuál era el papel de los sacerdotes en relación a Cocijo?",
+    options: ["Solo recitaban poemas", "Realizaban sacrificios para pedir lluvia", "Enseñaban matemáticas"],
+    correctIndex: 1
+  },
+  {
+    text: "¿Qué animal estaba asociado a muchos dioses zapotecas como símbolo espiritual?",
+    options: ["Serpiente", "Jaguar", "Águila"],
+    correctIndex: 1
+  }
+];
+
+    // Niveles con laberintos, obstáculos, preguntas y enemigos
+    const levels = [
+      {
+        playerStart: { x: 30, y: 30 },
+        goal: { x: 580, y: 580, width: 40, height: 40 },
+        obstacles: [
+          { x: 0, y: 100, width: 480, height: 20 },
+          { x: 160, y: 200, width: 480, height: 20 },
+          { x: 0, y: 300, width: 480, height: 20 },
+          { x: 160, y: 400, width: 480, height: 20 },
+          { x: 0, y: 500, width: 480, height: 20 },
+        ],
+        questionBlocks: [
+{ x: 120,  y: 80, width: 20, height: 20, questionIndex: 0, answered: false },
+  { x: 200, y: 180, width: 20, height: 20, questionIndex: 1, answered: false },
+  { x: 130, y: 280, width: 20, height: 20, questionIndex: 2, answered: false },
+  { x: 260, y: 340, width: 20, height: 20, questionIndex: 3, answered: false },
+  { x: 150, y: 460, width: 20, height: 20, questionIndex: 4, answered: false },
+  { x: 520, y: 70,  width: 20, height: 20, questionIndex: 5, answered: false },
+  { x: 610, y: 160, width: 20, height: 20, questionIndex: 6, answered: false },
+  { x: 550, y: 320, width: 20, height: 20, questionIndex: 7, answered: false },
+  { x: 120, y: 600, width: 20, height: 20, questionIndex: 8, answered: false },
+  { x: 600, y: 510, width: 20, height: 20, questionIndex: 9, answered: false },
+        ],
+        enemies: [
+          // Enemigos horizontales
+          { x: 120, y: 150, width: 20, height: 20, speed: 3, direction: 1, axis: 'horizontal', patrolArea: { minX: 100, maxX: 380 } },
+          { x: 400, y: 220, width: 20, height: 20, speed: 4, direction: 1, axis: 'horizontal', patrolArea: { minX: 350, maxX: 600 } },
+          { x: 250, y: 320, width: 20, height: 20, speed: 3, direction: 1, axis: 'horizontal', patrolArea: { minX: 220, maxX: 470 } },
+          { x: 150, y: 420, width: 20, height: 20, speed: 4, direction: 1, axis: 'horizontal', patrolArea: { minX: 130, maxX: 380 } },
+          // Enemigos verticales
+          { x: 500, y: 100, width: 20, height: 20, speed: 4, direction: 1, axis: 'vertical', patrolArea: { minY: 100, maxY: 320 } },
+          { x: 250, y: 400, width: 20, height: 20, speed: 5, direction: 1, axis: 'vertical', patrolArea: { minY: 370, maxY: 620 } },
+           { x: 220, y: 450, width: 20, height: 20, speed: 5, direction: 1, axis: 'vertical', patrolArea: { minY: 250, maxY: 500 } },
+            { x: 350, y: 400, width: 20, height: 20, speed: 5, direction: 1, axis: 'vertical', patrolArea: { minY: 370, maxY: 620 } },
+           { x: 550, y: 400, width: 20, height: 20, speed: 5, direction: 1, axis: 'vertical', patrolArea: { minY: 370, maxY: 620 } },
+        ],
+        background: '#F9F1D1' // fondo claro (beige)
+      },
+      {
+        playerStart: { x: 30, y: 30 },
+        goal: { x: 580, y: 580, width: 40, height: 40 },
+        obstacles: [
+          { x: 100, y: 0, width: 20, height: 480 },
+          { x: 200, y: 160, width: 20, height: 480 },
+          { x: 300, y: 0, width: 20, height: 480 },
+          { x: 400, y: 160, width: 20, height: 480 },
+          { x: 500, y: 0, width: 20, height: 480 },
+        ],
+        questionBlocks: [
+  { x: 120, y: 140, width: 20, height: 20, questionIndex: 10, answered: false },
+  { x: 240, y: 260, width: 20, height: 20, questionIndex: 11, answered: false },
+  { x: 160, y: 420, width: 20, height: 20, questionIndex: 12, answered: false },
+  { x: 280, y: 540, width: 20, height: 20, questionIndex: 13, answered: false },
+  { x: 180, y: 560, width: 20, height: 20, questionIndex: 14, answered: false },
+
+  { x: 520, y: 120, width: 20, height: 20, questionIndex: 15, answered: false },
+  { x: 520, y: 240, width: 20, height: 20, questionIndex: 16, answered: false },
+  { x: 540, y: 390, width: 20, height: 20, questionIndex: 17, answered: false },
+  { x: 560, y: 510, width: 20, height: 20, questionIndex: 18, answered: false },
+  { x: 580, y: 540, width: 20, height: 20, questionIndex: 19, answered: false },
+        ],
+         enemies:[
+  { x: 130, y: 80, width: 20, height: 20, speed: 5, direction: 1, axis: 'vertical',   patrolArea: { minY: 50,  maxY: 400 } },
+  { x: 230, y: 200, width: 20, height: 20, speed: 4, direction: 1, axis: 'vertical',   patrolArea: { minY: 150, maxY: 400 } },
+  { x: 330, y: 150, width: 20, height: 20, speed: 6, direction: 1, axis: 'vertical',   patrolArea: { minY: 130, maxY: 400 } },
+  { x: 430, y: 200, width: 20, height: 20, speed: 4, direction: 1, axis: 'vertical',   patrolArea: { minY: 180, maxY: 400 } },
+  { x: 530, y: 100, width: 20, height: 20, speed: 5, direction: 1, axis: 'vertical',   patrolArea: { minY: 100, maxY: 400 } },
+  // Nuevos enemigos con movimiento horizontal y más rápido
+  { x: 150, y: 300, width: 20, height: 20, speed: 6, direction: 1, axis: 'horizontal', patrolArea: { minX: 100, maxX: 400 } },
+  { x: 400, y: 350, width: 20, height: 20, speed: 7, direction: 1, axis: 'horizontal', patrolArea: { minX: 350, maxX: 600 } },
+  { x: 600, y: 150, width: 20, height: 20, speed: 5, direction: 1, axis: 'horizontal', patrolArea: { minX: 500, maxX: 700 } },
+  { x: 200, y: 450, width: 20, height: 20, speed: 7, direction: 1, axis: 'vertical',   patrolArea: { minY: 400, maxY: 550 } },
+  { x: 500, y: 500, width: 20, height: 20, speed: 6, direction: 1, axis: 'horizontal', patrolArea: { minX: 450, maxX: 650 } },
+],
+        background: '#D9B382' // fondo más oscuro tipo tierra
+      }
+    ];
+
+    function rectsIntersect(a, b) {
+      return (
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+      );
+    }
+
+    function initPlayer() {
+      player = {
+        x: levels[currentLevel].playerStart.x,
+        y: levels[currentLevel].playerStart.y,
+        width: playerSize,
+        height: playerSize,
+        speed: 4,
+        color: playerColor,
+      };
+    }
+
+    function draw() {
+      // Fondo nivel
+      ctx.fillStyle = levels[currentLevel].background;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Obstáculos
+      ctx.fillStyle = obstacleColor;
+      for (const obs of levels[currentLevel].obstacles) {
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+      }
+
+      // Preguntas
+      for (const q of levels[currentLevel].questionBlocks) {
+        if (!q.answered) {
+          ctx.fillStyle = questionColor;
+          ctx.fillRect(q.x, q.y, q.width, q.height);
+          ctx.fillStyle = '#000';
+          ctx.font = 'bold 18px Georgia';
+          ctx.fillText('?', q.x + 5, q.y + 17);
+        }
+      }
+
+      // Puerta meta
+      const g = levels[currentLevel].goal;
+      ctx.fillStyle = goalColor;
+      ctx.fillRect(g.x, g.y, g.width, g.height);
+      ctx.fillStyle = '#3B1F0B';
+      ctx.font = 'bold 20px Georgia';
+      ctx.fillText('Puerta', g.x + 5, g.y + 27);
+
+      // Enemigos
+      ctx.fillStyle = enemyColor;
+      for (const enemy of levels[currentLevel].enemies) {
+        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+      }
+
+      // Jugador
+      ctx.fillStyle = player.color;
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+    }
+
+    function movePlayer() {
+      if (gamePaused) return;
+
+      let newX = player.x;
+      let newY = player.y;
+
+      if (keys['ArrowUp']) newY -= player.speed;
+      if (keys['ArrowDown']) newY += player.speed;
+      if (keys['ArrowLeft']) newX -= player.speed;
+      if (keys['ArrowRight']) newX += player.speed;
+
+      const newPlayerRect = { x: newX, y: newY, width: player.width, height: player.height };
+
+      // Limites canvas
+      if (newX < 0 || newX + player.width > canvas.width) newX = player.x;
+      if (newY < 0 || newY + player.height > canvas.height) newY = player.y;
+
+      // Colisiones con obstáculos
+      for (const obs of levels[currentLevel].obstacles) {
+        if (rectsIntersect(newPlayerRect, obs)) {
+          // No permite mover si colisiona
+          return;
+        }
+      }
+  function move(direction) {
+      if (paused) return;
+      const speed = 5;
+      if (direction === "up") player.y -= speed;
+      if (direction === "down") player.y += speed;
+      if (direction === "left") player.x -= speed;
+      if (direction === "right") player.x += speed;
+    }
+      player.x = newX;
+      player.y = newY;
+    }
+const controlButtons = document.querySelectorAll('.control-btn');
+    controlButtons.forEach(btn => {
+      const key = btn.dataset.key;
+
+      btn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        keys[key] = true;
+      });
+
+      btn.addEventListener('touchend', e => {
+        e.preventDefault();
+        keys[key] = false;
+      });
+
+      // Para compatibilidad con mouse (opcional)
+      btn.addEventListener('mousedown', () => keys[key] = true);
+      btn.addEventListener('mouseup', () => keys[key] = false);
+      btn.addEventListener('mouseleave', () => keys[key] = false);
+    });
+    function moveEnemies() {
+      if (gamePaused) return;
+
+      for (const enemy of levels[currentLevel].enemies) {
+        if (enemy.axis === 'horizontal') {
+          enemy.x += enemy.speed * enemy.direction;
+          if (enemy.x < enemy.patrolArea.minX || enemy.x + enemy.width > enemy.patrolArea.maxX) {
+            enemy.direction *= -1;
+            enemy.x += enemy.speed * enemy.direction;
+          }
+        } else if (enemy.axis === 'vertical') {
+          enemy.y += enemy.speed * enemy.direction;
+          if (enemy.y < enemy.patrolArea.minY || enemy.y + enemy.height > enemy.patrolArea.maxY) {
+            enemy.direction *= -1;
+            enemy.y += enemy.speed * enemy.direction;
+          }
+        }
+      }
+    }
+
+    function checkCollisions() {
+      // Colision con enemigos
+      for (const enemy of levels[currentLevel].enemies) {
+        if (rectsIntersect(player, enemy)) {
+          alert('¡Perdiste! Has sido atrapado por un enemigo.');
+          restartLevel();
+          return;
+        }
+      }
+
+      // Colision con pregunta
+      for (const q of levels[currentLevel].questionBlocks) {
+        if (!q.answered && rectsIntersect(player, q)) {
+          askQuestion(q);
+          return;
+        }
+      }
+
+      // Colision con meta (puerta)
+      const goal = levels[currentLevel].goal;
+      if (rectsIntersect(player, goal)) {
+        if (allQuestionsAnswered()) {
+          if (currentLevel + 1 < levels.length) {
+            currentLevel++;
+            info.textContent = 'Nivel: ' + (currentLevel + 1);
+            initLevel();
+          } else {
+            alert('¡Felicidades! Has completado todos los niveles.');
+            currentLevel = 0;
+            info.textContent = 'Nivel: 1';
+            initLevel();
+          }
+        } else {
+          alert('Debes responder todas las preguntas para pasar al siguiente nivel.');
+        }
+      }
+    }
+
+    function allQuestionsAnswered() {
+      return levels[currentLevel].questionBlocks.every(q => q.answered);
+    }
+
+    function askQuestion(questionBlock) {
+      gamePaused = true;
+      const q = questions[questionBlock.questionIndex];
+      questionText.textContent = q.text;
+      answersDiv.innerHTML = '';
+      for (let i = 0; i < q.options.length; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = q.options[i];
+        btn.onclick = () => {
+          if (i === q.correctIndex) {
+            {
+      score += 10;
+      document.getElementById("score").textContent = score;
+    }
+
+            alert('¡Respuesta correcta!');
+            questionBlock.answered = true;
+          } else {
+            alert('Respuesta incorrecta. Intenta de nuevo.');
+          }
+          questionModal.style.visibility = 'hidden';
+          gamePaused = false;
+          draw();
+        };
+        answersDiv.appendChild(btn);
+      }
+      questionModal.style.visibility = 'visible';
+    }
+
+    function restartLevel() {
+      initLevel();
+          player.x = 50;
+    player.y = 50;
+    score = 0;
+    document.getElementById("score").textContent = score;
+    }
+
+    function initLevel() {
+      initPlayer();
+      // Reset respuestas preguntas de este nivel
+      for (const q of levels[currentLevel].questionBlocks) {
+        q.answered = false;
+      }
+      gamePaused = false;
+      draw();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    function gameLoop() {
+      if (!gamePaused) {
+        movePlayer();
+        moveEnemies();
+        checkCollisions();
+      }
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    initLevel();
+    gameLoop();
+  </script>
+</body>
+</html>
